@@ -1,29 +1,43 @@
-"""Your tests. Each milestone in README.md gets one here: write the test first, then make it pass.
+"""Tests for the four milestones in app/core.py and the command-line tool."""
+from app import core
+from app.cli import main
 
-They start skipped. Remove the `skip` line as you work on each milestone.
-"""
-import pytest
 
-# Milestone 1: Compile a corpus of cooking recipe instructions.
-@pytest.mark.skip(reason="remove this line when you start milestone 1")
 def test_milestone_1():
-    raise NotImplementedError("write the test for milestone 1")
+    corpus = core.milestone_1()
+    assert len(corpus) >= 30
+    assert all(isinstance(step, str) and step.strip() for step in corpus)
+    assert core.tokenize("Heat OIL, in a pan!") == ["heat", "oil", "in", "a", "pan"]
 
 
-# Milestone 2: Implement n-gram counting and maximum-likelihood probabilities with smoothing.
-@pytest.mark.skip(reason="remove this line when you start milestone 2")
 def test_milestone_2():
-    raise NotImplementedError("write the test for milestone 2")
+    model = core.milestone_2(k=0.1)
+    assert model["n"] == 3 and "pan" in model["vocab"]
+    # every smoothed distribution adds up to 1
+    for k in (0.1, 1):
+        total = sum(core.probability(model, ["add", "salt"], w, k=k) for w in model["vocab"])
+        assert abs(total - 1.0) < 1e-9
+    # maximum likelihood: "add salt" is always followed by "and" in the corpus
+    assert core.probability(model, ["add", "salt"], "and", k=0) == 1.0
+    assert core.probability(model, ["add", "salt"], "pan", k=0) == 0.0
+    # smoothing gives unseen words a small non-zero probability
+    assert core.probability(model, ["add", "salt"], "pan") > 0
 
 
-# Milestone 3: Create a function to generate recipe step continuations.
-@pytest.mark.skip(reason="remove this line when you start milestone 3")
 def test_milestone_3():
-    raise NotImplementedError("write the test for milestone 3")
+    model = core.milestone_2()
+    top = core.suggest_next(model, "add salt", top=3)
+    assert top[0][0] == "and"
+    assert [p for _, p in top] == sorted((p for _, p in top), reverse=True)
+    finished = core.milestone_3(model, "heat oil in a")
+    assert finished.startswith("heat oil in a") and len(finished.split()) > 4
+    # a context the model has never seen still gets suggestions (backoff)
+    assert len(core.suggest_next(model, "zzz qqq", top=3)) == 3
 
 
-# Milestone 4: Build a CLI for users to input partial steps and get suggestions.
-@pytest.mark.skip(reason="remove this line when you start milestone 4")
-def test_milestone_4():
-    raise NotImplementedError("write the test for milestone 4")
-
+def test_milestone_4(capsys):
+    text = core.milestone_4("bring a large")
+    assert "Likely next words:" in text and "Suggested step:" in text
+    assert "pot" in text
+    main(["suggest", "add", "salt"])
+    assert "and" in capsys.readouterr().out
